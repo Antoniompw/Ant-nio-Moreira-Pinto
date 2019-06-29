@@ -13,7 +13,7 @@ class Graph():
         import pandas as pd
 
         self.paths = {}
-        self.vertexes = {}
+        self.vertexes = []
         self.inverse_paths = {}
         csv = open(file_name)
         for line in csv:
@@ -21,24 +21,23 @@ class Graph():
             row = line.split(' ')
             row[1] = row[1].rstrip("\n")
             if(self.paths.get(row[0], None) == None):
-                self.paths[row[0]] = {}
+                self.paths[row[0]] = []
 
             # Register path
-            self.paths[row[0]][row[1]] = 1
+            self.paths[row[0]].append(row[1])
 
-            self.vertexes[row[0]] = 1
+            if row[0] not in self.vertexes:
+                self.vertexes.append(row[0])
+
     def chunks(self, l, n):
         l = [*l]
         n = max(1, n)
         return (l[i:i+n] for i in range(0, len(l), n))
 
     def busca_em_largura(self):
-        import time
-        start_time = time.time()
-        list = [*self.vertexes.keys()]
         index = 0
         if RANK == 0:
-            data = [list[index]]
+            data = [self.vertexes[index]]
         else:
             data = None
             chunks = None
@@ -49,59 +48,56 @@ class Graph():
                 chunks = [[] for _ in range(SIZE)]
                 for i, chunk in enumerate(data):
                     chunks[i % SIZE].append(chunk)
+            
             data = COMM.scatter(chunks, root=0)
-            print(data, "original")
+            #print(data, "original", RANK)
+
             new_list = []
             for i in data:
                 if self.paths.get(i, None) != None:
-                    for key in [*self.paths[i].keys()]:
-                        new_list.append(key)
+                    for j in self.paths[i]:
+                        if self.inverse_paths.get(j, None) == None:
+                            new_list.append(j)
             
+            #print(new_list,"expanded queue", RANK)
+            COMM.barrier()
             data = COMM.gather(new_list, root = 0)
-            print(new_list,"expanded queue")
             if RANK == 0:
                 for i in data:
                     for j in i:
                         if self.inverse_paths.get(j, None) == None:
-                            self.inverse_paths[j] = list[index]
-                
-
+                            self.inverse_paths[j] = self.vertexes[index]
                 data = [item for sublist in data for item in sublist]
-                print(self.inverse_paths, "--Inverted paths--")
-                print()
+                #print(self.inverse_paths, "--Inverted paths--")
+                #print()
                 if len(data) == 0:
+                    #print("search n:"+str(index)+" ended")
+                    #print("===========================")
+                    #print("===========================")
                     self.inverse_paths = {}
                     index = index + 1
-            list = COMM.bcast(data,0)
-            if list == []:
-                print("Done")
-                print("--- %s seconds ---" % (time.time() - start_time))
+                    if index < len(self.vertexes):
+                        data = [self.vertexes[index]]
+
+            index = COMM.bcast(index,0)
+            if index == len(self.vertexes):
                 return
 
-    def count_all():
-        counts = []
-        for i in self.vertexes.keys():
-            counts.append(self.count(self.inverse_paths, raiz, i))
-
-        return counts
-
-    def count(self, inverse_paths, origin, destination):
-        c = 0
-        while origin != destination:
-            if inverse_paths.get(destination, None) == None:
-                return -1
-            destination = inverse_paths[destination]
-            c = c+1
-        return c
-
-
 if __name__ == "__main__":
+    #print(RANK)
     if RANK == 0:
-        file_name = 'test.txt'
+        file_name = 'web-Google.txt'
         graph = Graph(file_name)
     else:
         graph = None
 
     graph = COMM.bcast(graph, root = 0)
-    print("Results:")
+    
+    import time
+    start_time = time.time()
     graph.busca_em_largura()
+    COMM.barrier()
+    if RANK == 0:
+        with open("result.txt", "a") as file:
+            file.write("How many processors"+SIZE)
+            file.write("--- %s seconds ---" % (time.time() - start_time))
