@@ -37,6 +37,8 @@ class Graph():
     def busca_em_largura(self):
         index = 0
         if RANK == 0:
+            import time
+            start_time = time.time()
             data = [self.vertexes[index]]
         else:
             data = None
@@ -74,6 +76,7 @@ class Graph():
                     #print("search n:"+str(index)+" ended")
                     #print("===========================")
                     #print("===========================")
+                    #print("BFS N°"+str(index)+" result "+str(self.inverse_paths))
                     self.inverse_paths = {}
                     index = index + 1
                     if index < len(self.vertexes):
@@ -81,23 +84,20 @@ class Graph():
 
             index = COMM.bcast(index,0)
             if index == len(self.vertexes):
+                if RANK == 0:
+                    with open("result.txt", "a") as file:
+                        file.write("How many processors "+str(SIZE)+"\n")
+                        file.write("--- %s seconds ---" % (time.time() - start_time)+"\n")
                 return
 
 if __name__ == "__main__":
     #print(RANK)
     if RANK == 0:
-        file_name = 'web-Google.txt'
+        file_name = 'test.txt'
         graph = Graph(file_name)
     else:
         graph = None
 
     graph = COMM.bcast(graph, root = 0)
-    
-    import time
-    start_time = time.time()
+
     graph.busca_em_largura()
-    COMM.barrier()
-    if RANK == 0:
-        with open("result.txt", "a") as file:
-            file.write("How many processors"+SIZE)
-            file.write("--- %s seconds ---" % (time.time() - start_time))
