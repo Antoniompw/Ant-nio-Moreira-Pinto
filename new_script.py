@@ -16,7 +16,7 @@ class Graph():
         self.vertexes = []
         self.inverse_paths = {}
         csv = open(file_name)
-        for line in csv:
+        for line, _ in zip(csv, range(30000)):
             # If the start point has not been started
             row = line.split(' ')
             row[1] = row[1].rstrip("\n")
@@ -29,10 +29,8 @@ class Graph():
             if row[0] not in self.vertexes:
                 self.vertexes.append(row[0])
 
-    def chunks(self, l, n):
-        l = [*l]
-        n = max(1, n)
-        return (l[i:i+n] for i in range(0, len(l), n))
+    def chunker_list(self, seq, size):
+        return (seq[i::size] for i in range(size))
 
     def busca_em_largura(self):
         index = 0
@@ -42,19 +40,17 @@ class Graph():
             data = [self.vertexes[index]]
         else:
             data = None
-            chunks = None
+            scattered_data = None
 
         while True:
             if RANK == 0:
-                # dividing data into chunks
-                chunks = [[] for _ in range(SIZE)]
-                for i, chunk in enumerate(data):
-                    chunks[i % SIZE].append(chunk)
+                scattered_data = self.chunker_list(data, SIZE)
             
-            data = COMM.scatter(chunks, root=0)
-            #print(data, "original", RANK)
+            data = COMM.scatter(scattered_data, root=0)
 
             new_list = []
+
+            self.inverse_paths = COMM.bcast(self.inverse_paths, root=0)
             for i in data:
                 if self.paths.get(i, None) != None:
                     for j in self.paths[i]:
@@ -62,8 +58,9 @@ class Graph():
                             new_list.append(j)
             
             #print(new_list,"expanded queue", RANK)
-            COMM.barrier()
+            
             data = COMM.gather(new_list, root = 0)
+
             if RANK == 0:
                 for i in data:
                     for j in i:
@@ -93,7 +90,7 @@ class Graph():
 if __name__ == "__main__":
     #print(RANK)
     if RANK == 0:
-        file_name = 'test.txt'
+        file_name = 'web-Google.txt'
         graph = Graph(file_name)
     else:
         graph = None
