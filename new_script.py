@@ -16,7 +16,7 @@ class Graph():
         self.vertexes = []
         self.inverse_paths = {}
         csv = open(file_name)
-        for line, _ in zip(csv, range(30000)):
+        for line, _ in zip(csv, range(200000)):
             # If the start point has not been started
             row = line.split(' ')
             row[1] = row[1].rstrip("\n")
